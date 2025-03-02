@@ -1,32 +1,21 @@
-# foodiespot_db.py
-
 import psycopg2
 import streamlit as st
 from datetime import datetime
 import random
 
-
-load_dotenv()
-
-DB_HOST = st.secrets["DB_HOST"]
-DB_NAME = st.secrets["DB_NAME"]
-DB_USER = st.secrets["DB_USER"]
-DB_PASSWORD = st.secrets["DB_PASSWORD"]
-DB_PORT = st.secrets["DB_PORT"]
-
 def get_connection():
     try:
         conn = psycopg2.connect(
-            host=DB_HOST,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            port=DB_PORT
+            host=st.secrets["DB_HOST"],
+            database=st.secrets["DB_NAME"],
+            user=st.secrets["DB_USER"],
+            password=st.secrets["DB_PASSWORD"],
+            port=st.secrets["DB_PORT"]
         )
         return conn
     except psycopg2.Error as e:
         print(f"Database connection error: {e}")
-        return None  # Return None if connection fails
+        return None
 
 def recommend_restaurant(cuisine=None, party_size=None, rating=None, address=None):
     conn = get_connection()
