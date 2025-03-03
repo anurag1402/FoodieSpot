@@ -56,7 +56,7 @@ def recommend_restaurant(cuisine=None, party_size=None, rating=None, address=Non
 def make_reservation(restaurant_name, date, time, party_size, customer_name):
     conn = get_connection()
     if conn is None:
-        return "Database connection failed. Please check your credentials."
+        return {"error": "Database connection failed. Please check your credentials."}
     cursor = conn.cursor()
 
     try:
@@ -65,14 +65,14 @@ def make_reservation(restaurant_name, date, time, party_size, customer_name):
 
         if not restaurant:
             conn.close()
-            return f"Restaurant '{restaurant_name}' not found."
+            return {"error": f"Restaurant '{restaurant_name}' not found."}
 
         restaurant_id, capacity, current_booking = restaurant
         print(f"Restaurant ID: {restaurant_id}, Capacity: {capacity}, Current Booking: {current_booking}")
 
         if current_booking + party_size > capacity:
             conn.close()
-            return f"Sorry, there are not enough spots available at {restaurant_name} on {date} at {time}. Would you like to check other options?"
+            return {"error": f"Sorry, there are not enough spots available at {restaurant_name} on {date} at {time}. Would you like to check other options?"}
 
         # Generate a random 5-digit reservation ID
         reservation_id = random.randint(10000, 99999)
@@ -83,7 +83,7 @@ def make_reservation(restaurant_name, date, time, party_size, customer_name):
             time_obj = datetime.strptime(time, "%H:%M").time()
         except ValueError as e:
             conn.close()
-            return f"Invalid date or time format: {e}"
+            return {"error": f"Invalid date or time format: {e}"}
 
         cursor.execute(
             "INSERT INTO reservations (reservation_id, restaurant_id, customer_name, date, time, party_size) VALUES (%s, %s, %s, %s, %s, %s)",
@@ -95,26 +95,38 @@ def make_reservation(restaurant_name, date, time, party_size, customer_name):
         cursor.execute("UPDATE restaurants SET current_booking = current_booking + %s WHERE restaurant_id = %s", (party_size, restaurant_id))
 
         conn.commit()
+        # Fetch the reservation details
+        cursor.execute("""
+            SELECT r.reservation_id, res.name, r.customer_name, r.date, r.time, r.party_size
+            FROM reservations r
+            JOIN restaurants res ON r.restaurant_id = res.restaurant_id
+            WHERE r.reservation_id = %s
+        """, (reservation_id,))
+        reservation = cursor.fetchone()
         conn.close()
 
-        return {
-            "reservation_id": reservation_id,
-            "restaurant_name": restaurant_name,
-            "date": date,
-            "time": time,
-            "party_size": party_size,
-            "customer_name": customer_name
-        }
+        if reservation:
+            return {
+                "reservation_id": reservation[0],
+                "restaurant_name": reservation[1],
+                "customer_name": reservation[2],
+                "date": str(reservation[3]),
+                "time": str(reservation[4]),
+                "party_size": reservation[5]
+            }
+        else:
+            return {"error": "Reservation not found after creation."}
     except psycopg2.Error as e:
         conn.rollback()
         conn.close()
         print(f"Database error during reservation: {e}")
-        return f"Database error during reservation: {e}"
+        return {"error": f"Database error during reservation: {e}"}
+
 
 def modify_reservation(reservation_id, new_date=None, new_time=None, new_party_size=None):
     conn = get_connection()
     if conn is None:
-        return "Database connection failed. Please check your credentials."
+        return {"error": "Database connection failed. Please check your credentials."}
     cursor = conn.cursor()
 
     try:
@@ -123,7 +135,7 @@ def modify_reservation(reservation_id, new_date=None, new_time=None, new_party_s
 
         if not reservation:
             conn.close()
-            return "Reservation not found."
+            return {"error": "Reservation not found."}
 
         restaurant_id, current_party_size, current_date, current_time = reservation
 
@@ -132,12 +144,16 @@ def modify_reservation(reservation_id, new_date=None, new_time=None, new_party_s
             cursor.execute("SELECT seating_capacity, current_booking FROM restaurants WHERE restaurant_id = %s", (restaurant_id,))
             capacity, current_booking_restaurant = cursor.fetchone()
 
-            cursor.execute("SELECT SUM(party_size) FROM reservations WHERE restaurant_id = %s AND date = %s AND time = %s AND reservation_id != %s", (restaurant_id, new_date or current_date, new_time or current_time, reservation_id))
+            # Ensure new_date and new_time are not None before using them
+            date_to_check = new_date if new_date is not None else current_date
+            time_to_check = new_time if new_time is not None else current_time
+
+            cursor.execute("SELECT SUM(party_size) FROM reservations WHERE restaurant_id = %s AND date = %s AND time = %s AND reservation_id != %s", (restaurant_id, date_to_check, time_to_check, reservation_id))
             total_reserved = cursor.fetchone()[0] or 0
 
             if current_booking_restaurant - current_party_size + new_party_size > capacity:
                 conn.close()
-                return "The restaurant does not have enough capacity for the new party size."
+                return {"error": "The restaurant does not have enough capacity for the new party size."}
 
         # Update reservation details
         cursor.execute(
@@ -150,18 +166,36 @@ def modify_reservation(reservation_id, new_date=None, new_time=None, new_party_s
             cursor.execute("UPDATE restaurants SET current_booking = current_booking - %s + %s WHERE restaurant_id = %s", (current_party_size, new_party_size, restaurant_id))
 
         conn.commit()
+        # Fetch the updated reservation details
+        cursor.execute("""
+            SELECT r.reservation_id, res.name, r.customer_name, r.date, r.time, r.party_size
+            FROM reservations r
+            JOIN restaurants res ON r.restaurant_id = res.restaurant_id
+            WHERE r.reservation_id = %s
+        """, (reservation_id,))
+        updated_reservation = cursor.fetchone()
         conn.close()
 
-        return "Reservation modified successfully."
+        if updated_reservation:
+            return {
+                "reservation_id": updated_reservation[0],
+                "restaurant_name": updated_reservation[1],
+                "customer_name": updated_reservation[2],
+                "date": str(updated_reservation[3]),
+                "time": str(updated_reservation[4]),
+                "party_size": updated_reservation[5]
+            }
+        else:
+            return {"error": "Reservation details not found after modification."}
     except psycopg2.Error as e:
         conn.rollback()
         conn.close()
-        return f"Database error during modification: {e}"
+        return {"error": f"Database error during modification: {e}"}
 
 def cancel_reservation(reservation_id):
     conn = get_connection()
     if conn is None:
-        return "Database connection failed. Please check your credentials."
+        return {"error": "Database connection failed. Please check your credentials."}
     cursor = conn.cursor()
 
     try:
@@ -170,7 +204,7 @@ def cancel_reservation(reservation_id):
 
         if not reservation:
             conn.close()
-            return "Reservation not found."
+            return {"error": "Reservation not found."}
 
         restaurant_id, party_size = reservation
 
@@ -180,16 +214,16 @@ def cancel_reservation(reservation_id):
 
         conn.commit()
         conn.close()
-        return "Reservation canceled successfully."
+        return {"message": "Reservation canceled successfully."}
     except psycopg2.Error as e:
         conn.rollback()
         conn.close()
-        return f"Database error during cancellation: {e}"
+        return {"error": f"Database error during cancellation: {e}"}
 
 def get_reservation_details(reservation_id):
     conn = get_connection()
     if conn is None:
-        return "Database connection failed. Please check your credentials."
+        return {"error": "Database connection failed. Please check your credentials."}
     cursor = conn.cursor()
 
     try:
@@ -213,10 +247,10 @@ def get_reservation_details(reservation_id):
                 "party_size": reservation[5]
             }
         else:
-            return "Reservation not found an this moment please try later"
+            return {"error": "Reservation not found."}
     except psycopg2.Error as e:
         conn.close()
-        return f"Database error during reservation details retrieval: {e}"
+        return {"error": f"Database error during reservation details retrieval: {e}"}
 
 def execute_sql_query(query):
     conn = get_connection()
