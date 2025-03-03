@@ -102,7 +102,10 @@ The prompt includes clear instructions, available tools, and examples to ensure 
 
 **User:** "How many Chinese restaurants are there?"
 
-**Agent:** "There are [Number] Chinese restaurants in our database."
+**Agent:** "There are 2 Chinese restaurants operated by us."
+
+Ex:<img width="465" alt="Screenshot 2025-03-03 at 3 32 51 PM" src="https://github.com/user-attachments/assets/6df52f5b-6d1f-48b8-8ee4-ac61b24db07d" />
+
 
 ### User Journey 4: Getting Restaurant Recommendations
 
