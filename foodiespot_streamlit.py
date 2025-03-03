@@ -120,6 +120,34 @@ elif page == "🍽️ Top Restaurants":
 
             st.markdown("</div>", unsafe_allow_html=True)
 
+            # Display Top 5 Restaurants by Occupancy
+            st.markdown("""
+            <div style="background-color: #fff; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+            """, unsafe_allow_html=True)
+
+            cursor.execute("SELECT name, cuisine, (CAST(current_booking AS FLOAT) / seating_capacity) AS occupancy_rate, address FROM restaurants ORDER BY occupancy_rate DESC LIMIT 5")
+            top_occupancy_restaurants = cursor.fetchall()
+
+            if top_occupancy_restaurants:
+                st.markdown("<h3>Top 5 Restaurants today</h3>", unsafe_allow_html=True)
+                st.markdown('<div class="restaurant-list">', unsafe_allow_html=True)
+
+                for name, cuisine, occupancy_rate, address in top_occupancy_restaurants:
+                    occupancy_percentage = round(occupancy_rate * 100, 1)
+                    st.markdown(f"""
+                    <div class="restaurant-card">
+                        <div class="restaurant-name">{name}</div>
+                        <div class="restaurant-occupancy">Occupancy: {occupancy_percentage}%</div>
+                        <div>{address}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.info("No restaurants found.")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
         except Exception as e:
             st.error(f"Error fetching restaurants: {e}")
         finally:
@@ -135,11 +163,10 @@ elif page == "ℹ️ About":
     <div style="background-color: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
     <h3>Our Mission</h3>
     <p>FoodieSpot is dedicated to connecting food lovers with their perfect dining experiences.
-        Our AI-powered platform makes restaurant discovery and reservations effortless.</p>
+        Making restaurant discovery and reservations effortless.</p>
 
     <h3>How It Works</h3>
-    <p>Simply chat with our assistant to find restaurants, get recommendations, or make reservations.
-    Our system uses advanced AI to understand your preferences and provide personalized suggestions.</p>
+    <p>Simply chat with our assistant to find restaurants, get recommendations, or make reservations.</p>
 
     <h3>Features</h3>
     <ul>
