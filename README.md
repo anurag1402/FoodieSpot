@@ -66,36 +66,164 @@ FoodieSpot is an AI-powered restaurant reservation agent designed to streamline 
     -   Create a new app on Streamlit Cloud and link your repository.
     -   Add your database and Google API credentials to Streamlit Secrets in the app settings.
 
-## Prompt Engineering Approach
 
-The core of FoodieSpot's conversational capabilities lies in its prompt engineering. We use detailed prompts to guide the AI model (Gemini 1.5 Flash 8b) to:
+# FoodieSpot: Your AI Restaurant Assistant
 
--   **Understand User Intent:** Identify whether the user wants to make a reservation, modify an existing one, cancel, or ask a general question.
--   **Generate Function Calls:** Create structured function calls with relevant parameters for database interactions.
--   **Generate SQL Queries:** Translate natural language questions into safe, read-only SQL queries.
--   **Handle Date and Time:** Resolve date references like "today" and "tomorrow" and ensure consistent date formatting.
--   **Provide Context:** Include the current conversation history in the prompt to maintain context.
--   **Tool Usage:** Instruct the LLM which tools it has access to, and when to use those tools.
+## Overview
 
-The prompt includes clear instructions, available tools, and examples to ensure accurate and relevant responses.
+FoodieSpot is an AI-powered application designed to simplify restaurant discovery and reservation management.  It leverages a large language model (LLM) to understand user requests, extract relevant information, and interact with a database to provide personalized recommendations, make reservations, and manage existing bookings.
+
+## Features
+
+*   **AI-Powered Chat Assistant:**  Interact with an AI assistant to find restaurants, make reservations, and get answers to your dining-related questions.
+*   **Personalized Recommendations:**  Receive tailored restaurant recommendations based on your preferences (cuisine, rating, location).
+*   **Easy Reservation Management:**  Make, modify, and cancel reservations quickly and easily.
+*   **Comprehensive Restaurant Information:**  Access detailed restaurant information, including cuisine, rating, address, and seating capacity.
+*   **24/7 Availability:**  The AI assistant is available 24/7 to assist you.
+*   **Top-Rated Restaurant Listings:** Browse top-rated restaurants by cuisine.
+
+## Architecture
+
+The application consists of three main components:
+
+*   **Streamlit Frontend (`foodiespot_streamlit.py`):**  Provides the user interface for interacting with the application.
+*   **AI Agent (`foodiespot_agent.py`):**  Handles user input, determines intent, extracts information, interacts with the LLM, and calls the appropriate database functions.
+*   **Database Layer (`foodiespot_db.py`):**  Provides functions for interacting with the PostgreSQL database, including making, modifying, and canceling reservations, retrieving restaurant information, and executing SQL queries.
+
+## Prompt Engineering
+
+The application relies on carefully crafted prompts to guide the LLM to perform the desired tasks. Key elements of the prompt engineering approach include:
+
+*   **Clear Intent Definition:**  The LLM is instructed to accurately identify the user's intent (e.g., making a reservation, getting recommendations).
+*   **Information Extraction:**  Prompts guide the LLM to extract necessary information from user input.
+*   **Tool Usage:**  The LLM is directed to use the appropriate tools (functions) to fulfill user requests.
+*   **Safe Query Generation:**  When dealing with general questions, prompts ensure the LLM generates safe and accurate SQL queries.
+*   **Conversational Tone:**  Prompts encourage a friendly and helpful tone in the LLM's responses.
+
+**Example Prompts:**
+
+Here are some  prompts used in the `foodiespot_agent.py` file:
+
+*   **System Prompt (within `run_agent` function):**
+
+    ```python
+    prompt = f"""
+    You are a restaurant reservation agent for FoodieSpot. Your goal is to help users make, modify, or cancel reservations.
+
+    Available Tools:
+    {json.dumps(function_descriptions, indent=2)}
+
+    Instructions:
+    1. Analyze the user's input and the conversation history to understand what the user wants.
+    2. If the user wants to make a reservation, extract the following information from the user input: restaurant name, date (DD-MM-YYYY), time (HH:MM), party size, and customer name.
+    3. Once you have extracted all the information, call the `make_reservation` tool with the extracted information.
+    4. If the user wants to modify a reservation, YOU MUST call the `modify_reservation` tool.
+    5. If the user wants to cancel a reservation, YOU MUST call the `cancel_reservation` tool.
+    6. If the user asks for reservation details, YOU MUST call the `get_reservation_details` tool.
+    7. For any other questions that are outside of the above tools, just respond politely and explain you cannot help.
+    8. If any information is missing, ask the user for the missing information before calling the tool. Ask one question at a time.
+    9. When asking for the date, use DD-MM-YYYY format. When asking for time, use HH:MM format.
+    10. After a successful tool call, return the reservation id to the user along with a friendly confirmation message.
+    11. When handling dates, confirm the date and resolve references like 'today' or 'tomorrow' to an actual 'DD-MM-YYYY' date before calling a tool.
+    12. NOTE: Do NOT handle restaurant recommendations yourself - these are processed separately.
+
+    Current Conversation:
+    {chat_history}
+
+    User: {user_input}
+    Agent:
+    """
+    ```
+
+*   **SQL Query Generation Prompt (within `generate_sql_query` function):**
+
+    ```python
+    prompt = f"""
+    You are an AI assistant that translates natural language questions into SQL queries.
+    The database has the following tables:
+    - restaurants (restaurant_id INTEGER, name VARCHAR, cuisine VARCHAR, rating FLOAT, address TEXT, seating_capacity INTEGER, current_booking INTEGER)
+    - reservations (reservation_id INTEGER, restaurant_id INTEGER, customer_name VARCHAR, date DATE, time TIME, party_size INTEGER)
+
+    The user asks: "{user_question}"
+
+    Generate a safe, well-formed SQL query to answer this question about restaurants or reservations. Return ONLY the SQL query without any explanations.
+    Make sure it is a SELECT query only, no modification queries allowed.
+    """
+    ```
+
+*   **Recommendation Interpretation Prompt (within `process_general_query` function):**
+
+    ```python
+    interpretation_prompt = f"""
+    The user asked for a recommendation: "{user_input}"
+
+    The database query returned these results:
+    {result_str}
+
+    Please format these as restaurant recommendations in a conversational style.
+    Highlight the restaurant name, cuisine type, rating, and location.
+    DO NOT ask for additional information like area, date or time preferences.
+    DO NOT ask any follow-up questions.
+    Just provide the recommendations directly.
+    """
+    ```
+
+These prompts are designed to guide the LLM in understanding user requests, extracting relevant information, and generating appropriate responses.
+
+## Business Strategy
+
+FoodieSpot aims to provide a seamless and personalized restaurant experience. The core elements of the business strategy are:
+
+*   **AI-Powered Convenience:** Simplify the restaurant search and reservation process using AI.
+*   **Personalized Recommendations:**  Offer tailored recommendations based on user preferences.
+*   **Comprehensive Restaurant Information:** Provide detailed information about restaurants.
+*   **Efficient Reservation Management:**  Enable users to easily manage their reservations.
+*   **24/7 Availability:**  Provide a 24/7 AI assistant.
+
+
+
+## Assumptions
+
+*   The database contains accurate and up-to-date information.
+*   The LLM accurately understands user intent.
+*   Users are comfortable interacting with an AI assistant.
+*   A stable internet connection is available.
+*   The Google Gemini API remains available and affordable.
+
+## Limitations
+
+*   **Database Size:**  Effectiveness depends on the size and quality of the restaurant database.
+*   **Language Understanding:**  The LLM may struggle with complex or ambiguous requests.
+*   **Error Handling:**  Unexpected errors may occur.
+*   **Scalability:**  Scalability may be limited by the database and LLM API.
+*   **Security:**  Vulnerable to security risks (e.g., SQL injection) if not properly secured.
+*   **LLM Cost:** The cost of using the LLM API could be a limiting factor.
+
+## Future Enhancements
+
+*   **Improved Intent Detection:**  Implement more sophisticated intent detection algorithms.
+*   **Contextual Awareness:**  Improve the LLM's ability to understand conversation context.
+*   **Multi-Lingual Support:**  Add support for multiple languages.
+*   **Integration with Mapping Services:**  Integrate with mapping services for directions.
+*   **User Reviews and Ratings:**  Add user reviews and ratings.
+*   **Image Recognition:**  Allow users to search based on photos of food or ambiance.
+*   **Real-Time Availability Updates:**  Integrate with restaurant systems for real-time availability.
+*   **Automated Seating Management:**  Develop an automated seating management system.
+
 
 ## Example Conversations
 
 ### User Journey 1: Making a Reservation
+<img width="310" alt="Screenshot 2025-03-03 at 5 01 32 PM" src="https://github.com/user-attachments/assets/fa598fa7-0126-4185-a9e7-6b07eb504465" />
 
-**User:** "I'd like to make a reservation for 4 at an Italian restaurant tomorrow at 7 PM."
 
-**Agent:** "Great! What is your name?"
-
-**User:** "John Doe."
-
-**Agent:** "Reservation confirmed for John Doe at [Restaurant Name] on [Date] at 7 PM for 4 people. Reservation ID: [Random ID]."
 
 ### User Journey 2: Modifying a Reservation
 
-**User:** "Can I change my reservation ID 123456 to 8 PM?"
+<img width="516" alt="Screenshot 2025-03-03 at 4 48 04 PM" src="https://github.com/user-attachments/assets/4f530be7-126b-422b-b853-ba1b3c812cb8" />
 
-**Agent:** "Reservation modified successfully. Reservation ID: 123456."
+<img width="475" alt="Screenshot 2025-03-03 at 4 49 15 PM" src="https://github.com/user-attachments/assets/99ec8eee-4afa-47c0-bede-616d27daf107" />
+
 
 
 ### User Journey 3: Asking a General Question
@@ -114,23 +242,6 @@ Ex:
 
 <img width="540" alt="Screenshot 2025-03-03 at 3 27 46 PM" src="https://github.com/user-attachments/assets/0d964270-8541-4bf4-9d28-dbe7d8c3043c" />
 
-## Business Strategy Summary
+#
 
-FoodieSpot aims to revolutionize the restaurant reservation experience by providing an intuitive and efficient AI-driven solution. Our business strategy focuses on:
 
-1.  **Enhancing User Experience:** Delivering a seamless and personalized reservation experience through natural language interaction.
-2.  **Expanding Functionality:** Continuously adding new features and integrations to meet evolving user needs.
-3.  **Strategic Partnerships:** Collaborating with restaurants to offer exclusive deals and promotions.
-4.  **Data-Driven Insights:** Utilizing user data to improve recommendations and optimize the reservation process.
-5.  **Scalability:** Designing the platform to handle a growing user base and expand to new markets.
-6. **Cost Efficiency:** Using LLM to reduce customer support and reservation handling costs.
-
-By prioritizing user satisfaction and leveraging cutting-edge technology, FoodieSpot strives to become the leading AI restaurant reservation agent.
-
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request with your changes.
-
-## License
-
-This project is licensed under the MIT License.
