@@ -26,7 +26,7 @@ FoodieSpot is an AI-powered restaurant reservation agent designed to streamline 
 1.  **Clone the Repository:**
 
     ```bash
-    git clone [your_repository_url]
+    git clone [https://github.com/anurag1402/FoodieSpot.git]
     cd FoodieSpot
     ```
 
