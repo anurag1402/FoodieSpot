@@ -26,7 +26,7 @@ FoodieSpot is an AI-powered restaurant reservation agent designed to streamline 
 1.  **Clone the Repository:**
 
     ```bash
-    git clone [your_repository_url]
+    git clone [https://github.com/anurag1402/FoodieSpot.git]
     cd FoodieSpot
     ```
 
@@ -97,17 +97,25 @@ The prompt includes clear instructions, available tools, and examples to ensure 
 
 **Agent:** "Reservation modified successfully. Reservation ID: 123456."
 
+
 ### User Journey 3: Asking a General Question
 
 **User:** "How many Chinese restaurants are there?"
 
-**Agent:** "There are [Number] Chinese restaurants in our database."
+**Agent:** "There are 2 Chinese restaurants operated by us."
+
+Ex:<img width="465" alt="Screenshot 2025-03-03 at 3 32 51 PM" src="https://github.com/user-attachments/assets/6df52f5b-6d1f-48b8-8ee4-ac61b24db07d" />
+
 
 ### User Journey 4: Getting Restaurant Recommendations
 
 **User:** "Recommend a restaurant with a rating of 4 or higher."
 
 **Agent:** "Recommended Restaurants: \n - **[Restaurant Name]**: [Cuisine], Rating: [Rating], Address: [Address]"
+
+Examples:
+<img width="498" alt="Screenshot 2025-03-03 at 3 29 13 PM" src="https://github.com/user-attachments/assets/11efda72-2217-493e-b50d-7674013145ba" />
+<img width="540" alt="Screenshot 2025-03-03 at 3 27 46 PM" src="https://github.com/user-attachments/assets/0d964270-8541-4bf4-9d28-dbe7d8c3043c" />
 
 ## Business Strategy Summary
 

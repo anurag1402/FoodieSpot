@@ -5,24 +5,15 @@ from foodiespot_db import recommend_restaurant, make_reservation, modify_reserva
 import streamlit as st
 from datetime import date, timedelta,datetime
 
+import re
+
+
+
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash-8b')
 
-function_descriptions = [
-    {
-        "name": "recommend_restaurant",
-        "description": "Recommends a restaurant based on user preferences.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "cuisine": {"type": "string", "description": "The type of cuisine (e.g., Italian, Mexican)."},
-                "party_size": {"type": "integer", "description": "The number of people in the party."},
-                "rating": {"type": "number", "description": "Minimum restaurant rating."},
-                "address": {"type": "string", "description": "The address of the user or location of interest."},
-            },
-        },
-    },
+unction_descriptions = [
     {
         "name": "make_reservation",
         "description": "Makes a restaurant reservation.",
@@ -112,33 +103,67 @@ def resolve_date(date_str):
             except:
                 return None
 
-def get_top_restaurants():
-    """Fetches the top 3 restaurants."""
-    conn = get_connection()
-    if conn is None:
-        return "Database connection failed. Please check your credentials."
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute("SELECT name, cuisine, rating, address FROM restaurants ORDER BY rating DESC LIMIT 3")
-        top_restaurants = cursor.fetchall()
-        conn.close()
-        return top_restaurants
-    except Exception as e:
-        conn.close()
-        return f"Database error: {e}"
+def determine_intent(user_input):
+    """Determine user intent using keywords but prioritize recommendation requests"""
+    user_input_lower = user_input.lower()
+    
+    # First check for recommendation keywords
+    recommendation_keywords = ["recommend", "suggestion", "best", "top", "good", "popular"]
+    if any(keyword in user_input_lower for keyword in recommendation_keywords):
+        return "RECOMMENDATION"
+        
+    # Then check for other reservation actions
+    if any(word in user_input_lower for word in ["book", "reserve", "make reservation"]):
+        return "MAKE_RESERVATION"
+    elif any(word in user_input_lower for word in ["change", "modify", "update", "reschedule"]):
+        return "MODIFY_RESERVATION"
+    elif any(word in user_input_lower for word in ["cancel", "delete"]):
+        return "CANCEL_RESERVATION"
+    elif any(word in user_input_lower for word in ["show", "view", "get", "details", "find"]) and "reservation" in user_input_lower:
+        return "GET_RESERVATION_DETAILS"
+    elif any(word in user_input_lower for word in ["how many", "which", "list", "show", "what", "where", "when"]):
+        return "DATABASE_QUERY"
+    else:
+        return "OTHER"
 
 def generate_sql_query(user_question):
     """Generates a SQL query from a natural language question."""
+    # For recommendation queries, enhance the query generation with specific structure
+    if "recommend" in user_question.lower() or "suggestion" in user_question.lower():
+        # Extract cuisine type and rating if mentioned
+        cuisine_types = ["italian", "mexican", "chinese", "indian", "japanese", "american", "french", "thai", "greek", "spanish"]
+        cuisine_type = None
+        for cuisine in cuisine_types:
+            if cuisine in user_question.lower():
+                cuisine_type = cuisine.capitalize()
+                break
+        
+        # Check for rating requirements
+        rating_match = re.search(r'rating\s*(of|above|over)?\s*([0-9.]+)', user_question.lower())
+        rating_threshold = None
+        if rating_match:
+            rating_threshold = float(rating_match.group(2))
+        
+        # Construct appropriate SQL query based on extracted parameters
+        if cuisine_type and rating_threshold:
+            return f"SELECT name, cuisine, rating, address FROM restaurants WHERE cuisine = '{cuisine_type}' AND rating >= {rating_threshold} ORDER BY rating DESC"
+        elif cuisine_type:
+            return f"SELECT name, cuisine, rating, address FROM restaurants WHERE cuisine = '{cuisine_type}' ORDER BY rating DESC"
+        elif rating_threshold:
+            return f"SELECT name, cuisine, rating, address FROM restaurants WHERE rating >= {rating_threshold} ORDER BY rating DESC"
+        else:
+            return "SELECT name, cuisine, rating, address FROM restaurants ORDER BY rating DESC LIMIT 5"
+    
+    # For general queries, use the LLM
     prompt = f"""
     You are an AI assistant that translates natural language questions into SQL queries.
-    The database has tables:
-    - restaurants (id, name, cuisine, rating, address, seating_capacity, current_booking)
-    - reservations (id, restaurant_id, customer_name, date, time, party_size)
-    
+    The database has the following tables:
+    - restaurants (restaurant_id INTEGER, name VARCHAR, cuisine VARCHAR, rating FLOAT, address TEXT, seating_capacity INTEGER, current_booking INTEGER)
+    - reservations (reservation_id INTEGER, restaurant_id INTEGER, customer_name VARCHAR, date DATE, time TIME, party_size INTEGER)
+
     The user asks: "{user_question}"
     
-    Generate a safe, well-formed SQL query to answer this question. Return ONLY the SQL query without any explanations.
+    Generate a safe, well-formed SQL query to answer this question about restaurants or reservations. Return ONLY the SQL query without any explanations.
     Make sure it is a SELECT query only, no modification queries allowed.
     """
     
@@ -169,93 +194,125 @@ def is_safe_query(query):
         
     return True
 
-def determine_intent(user_input):
-    """Determine the user's intent from their input."""
-    user_input_lower = user_input.lower()
-    
-    if any(word in user_input_lower for word in ["book", "reserve", "make a reservation"]):
-        return "make_reservation"
-    elif any(word in user_input_lower for word in ["change", "modify", "update", "reschedule"]) and "reservation" in user_input_lower:
-        return "modify_reservation"
-    elif any(word in user_input_lower for word in ["cancel", "delete"]) and "reservation" in user_input_lower:
-        return "cancel_reservation"
-    elif any(word in user_input_lower for word in ["recommend", "suggest", "find"]):
-        return "recommend_restaurant"
-    elif "details" in user_input_lower and "reservation" in user_input_lower:
-        return "get_reservation_details"
-    else:
-        return "general_query"
-
 def process_general_query(user_input):
-    """Process a general query about restaurants or reservations."""
-    # Check if this is likely a database query
-    if any(word in user_input.lower() for word in ["how many", "which", "list", "show me", "what", "where", "when"]):
-        sql_query = generate_sql_query(user_input)
+    """Process a general query about restaurants or reservations, including recommendations."""
+    # Determine if this is a recommendation request based on keywords
+    is_recommendation = any(word in user_input.lower() for word in ["recommend", "suggestion", "best", "top", "good", "popular"])
+    
+    # Generate appropriate SQL query
+    sql_query = generate_sql_query(user_input)
+    
+    if sql_query and is_safe_query(sql_query):
+        results = execute_sql_query(sql_query)
         
-        if sql_query and is_safe_query(sql_query):
-            results = execute_sql_query(sql_query)
+        if isinstance(results, list):
+            if not results:
+                return "I don't have any restaurants that match your criteria at the moment."
             
-            if isinstance(results, list):
-                if not results:
-                    return "No results found for your query."
+            # Generate a human-readable response using the model
+            result_str = "\n".join([str(row) for row in results])
+            
+            # Use different prompt for recommendations vs. general queries
+            if is_recommendation:
+                interpretation_prompt = f"""
+                The user asked for a recommendation: "{user_input}"
                 
-                # Generate a human-readable response using the model
-                result_str = "\n".join([str(row) for row in results])
+                The database query returned these results:
+                {result_str}
+                
+                Please format these as restaurant recommendations in a conversational style. 
+                Highlight the restaurant name, cuisine type, rating, and location.
+                DO NOT ask for additional information like area, date or time preferences.
+                DO NOT ask any follow-up questions.
+                Just provide the recommendations directly.
+                """
+            else:
                 interpretation_prompt = f"""
                 The user asked: "{user_input}"
                 
-                The SQL query results are:
+                The database query returned these results:
                 {result_str}
                 
-                Please format these results in a human-readable way,if you dont have answers, just say "I don't have an answer for that."
+                Format these results in a conversational, helpful way.
+                DO NOT ask for additional information.
+                DO NOT ask any follow-up questions.
+                """
+            
+            interpretation = model.generate_content(interpretation_prompt)
+            return interpretation.text
+        else:
+            return "I couldn't find any restaurants matching your criteria at the moment."
+    else:
+        # Fall back to a default response for recommendations
+        if is_recommendation:
+            default_query = "SELECT name, cuisine, rating, address FROM restaurants ORDER BY rating DESC LIMIT 5"
+            results = execute_sql_query(default_query)
+            
+            if isinstance(results, list) and results:
+                result_str = "\n".join([str(row) for row in results])
+                
+                interpretation_prompt = f"""
+                The user asked for a recommendation: "{user_input}"
+                
+                Since I couldn't create a specific query, here are our top-rated restaurants:
+                {result_str}
+                
+                Please format these as restaurant recommendations in a conversational style.
+                DO NOT ask for additional information like area, date or time preferences.
+                DO NOT ask any follow-up questions.
+                Just provide the recommendations directly.
                 """
                 
                 interpretation = model.generate_content(interpretation_prompt)
                 return interpretation.text
-            else:
-                return f"Error executing query: {results}"
-        else:
-            # Fall back to general conversation
-            return None
-    else:
-        # Not a database query
+        
         return None
 
 def run_agent(user_input, chat_history):
-    # First, check if it's a general query that needs SQL generation
+    # Determine user intent directly based on input text
     intent = determine_intent(user_input)
     
-    if intent == "general_query":
-        response = process_general_query(user_input)
-        if response:
-            return response
+    # For restaurant recommendations, ALWAYS process directly through the general query function
+    if intent == "RECOMMENDATION":
+        general_response = process_general_query(user_input)
+        if general_response:
+            return general_response
+        # Even if process_general_query returns None, don't proceed to the LLM for recommendations
+        return "I'm sorry, I couldn't find any restaurants matching your criteria at the moment."
     
-    # If not handled as a general query or SQL failed, proceed with regular function calls
+    # For database queries, try process_general_query first
+    if intent == "DATABASE_QUERY":
+        general_response = process_general_query(user_input)
+        if general_response:
+            return general_response
+
+    # For other intents, use the LLM with function calling
     prompt = f"""
-    You are a restaurant reservation agent for FoodieSpot. Your goal is to help users make, modify, or cancel reservations, and provide restaurant recommendations.
+You are a restaurant reservation agent for FoodieSpot. Your goal is to help users make, modify, or cancel reservations.
 
-    Available Tools:
-    {json.dumps(function_descriptions, indent=2)}
+Available Tools:
+{json.dumps(function_descriptions, indent=2)}
 
-    Instructions:
-    1. Analyze the user's input to determine their intent (reservation, modification, cancellation, recommendation, details retrieval).
-    2. If the user's intent requires a tool, generate a function call with the necessary parameters.
-    3. If a tool is called, execute the function and provide the result to the user.
-    4. If the user's intent does not require a tool, provide a helpful response.
-    5. Always ask for all required information before calling a tool.
-    6. If a tool call fails, inform the user and ask them to provide correct information.
-    7. When a user mentions a date, confirm the date and resolve references like 'today' or 'tomorrow' to an actual 'DD-MM-YYYY' date before calling a tool.
-    8. If the user specifically states that location or rating is not an issue, or similar phrases implying any value works, then fetch the top 3 restaurants.
-    9. If the user asks a general question about the restaurants, generate a SQL query to answer it.
-    10. For date formats, always use DD-MM-YYYY format when calling functions.
-    11.Don't ask for details at once, ask for one detail at a time.
-    
-    Current Conversation:
-    {chat_history}
+Instructions:
+1. Analyze the user's input and the conversation history to understand what the user wants. 
+2. If the user wants to make a reservation, extract the following information from the user input: restaurant name, date (DD-MM-YYYY), time (HH:MM), party size, and customer name. 
+3. Once you have extracted all the information, call the `make_reservation` tool with the extracted information.
+4. If the user wants to modify a reservation, YOU MUST call the `modify_reservation` tool.
+5. If the user wants to cancel a reservation, YOU MUST call the `cancel_reservation` tool.
+6. If the user asks for reservation details, YOU MUST call the `get_reservation_details` tool.
+7. For any other questions that are outside of the above tools, just respond politely and explain you cannot help.
+8. If any information is missing, ask the user for the missing information before calling the tool. Ask one question at a time.
+9. When asking for the date, use DD-MM-YYYY format. When asking for time, use HH:MM format.
+10. After a successful tool call, return the reservation id to the user along with a friendly confirmation message.
+11. When handling dates, confirm the date and resolve references like 'today' or 'tomorrow' to an actual 'DD-MM-YYYY' date before calling a tool.
+12. NOTE: Do NOT handle restaurant recommendations yourself - these are processed separately.
 
-    User: {user_input}
-    Agent:
-    """
+Current Conversation:
+{chat_history}
+
+User: {user_input}
+Agent:
+"""
 
     response = model.generate_content(
         prompt,
@@ -271,16 +328,21 @@ def run_agent(user_input, chat_history):
             arguments = json.loads(arguments_json)
 
             try:
-                if function_name == "recommend_restaurant":
-                    result = recommend_restaurant(**arguments)
-                elif function_name == "make_reservation":
+                # Execute the appropriate function based on the function call
+                if function_name == "make_reservation":
+                    # Resolve date if provided
                     if "date" in arguments:
                         resolved_date = resolve_date(arguments["date"])
                         if resolved_date:
                             arguments["date"] = resolved_date
                         else:
                             return "Invalid date format. Please use 'DD-MM-YYYY', 'today', or 'tomorrow'."
+                    
                     result = make_reservation(**arguments)
+                    if isinstance(result, dict) and 'error' not in result:
+                        confirmation_message = f"Reservation confirmed! Your reservation ID is {result['reservation_id']}"
+                        return result  # Return the whole dictionary
+                    return result
                 elif function_name == "modify_reservation":
                     if "reservation_id" in arguments and isinstance(arguments["reservation_id"], float):
                         arguments["reservation_id"] = int(arguments["reservation_id"])
@@ -291,14 +353,17 @@ def run_agent(user_input, chat_history):
                         else:
                             return "Invalid date format. Please use 'DD-MM-YYYY', 'today', or 'tomorrow'."
                     result = modify_reservation(**arguments)
+                    return result
                 elif function_name == "cancel_reservation":
                     if "reservation_id" in arguments and isinstance(arguments["reservation_id"], float):
                         arguments["reservation_id"] = int(arguments["reservation_id"])
                     result = cancel_reservation(**arguments)
+                    return result
                 elif function_name == "get_reservation_details":
                     if "reservation_id" in arguments and isinstance(arguments["reservation_id"], float):
                         arguments["reservation_id"] = int(arguments["reservation_id"])
                     result = get_reservation_details(**arguments)
+                    return result
                 elif function_name == "execute_sql_query":
                     query = arguments["query"]
                     if is_safe_query(query):
@@ -313,13 +378,13 @@ def run_agent(user_input, chat_history):
                         else:
                             return results  # return the error message
                     else:
-                        return "Sorry, I can only execute safe read-only SQL queries."
-                return result
+                        return "The provided query appears to be unsafe and cannot be executed."
+                else:
+                    return f"I do not recognize this tool. Function name: {function_name}"
             except Exception as e:
                 return f"An error occurred during function call: {e}. Please provide correct information."
         elif response.candidates[0].content.parts:
+            # If the model responds without a tool
             return response.text
         else:
-            return "I'm not sure how to respond to that. Could you please clarify?"
-    else:
-        return "I'm not sure how to respond."
+            return "I'm not sure how to respond. Could you please clarify?"
