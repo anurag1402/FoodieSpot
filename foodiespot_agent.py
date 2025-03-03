@@ -207,7 +207,7 @@ def process_general_query(user_input):
                 The SQL query results are:
                 {result_str}
                 
-                Please format these results in a human-readable way, explaining what they represent.
+                Please format these results in a human-readable way,if you dont have answers, just say "I don't have an answer for that."
                 """
                 
                 interpretation = model.generate_content(interpretation_prompt)
@@ -248,7 +248,8 @@ def run_agent(user_input, chat_history):
     8. If the user specifically states that location or rating is not an issue, or similar phrases implying any value works, then fetch the top 3 restaurants.
     9. If the user asks a general question about the restaurants, generate a SQL query to answer it.
     10. For date formats, always use DD-MM-YYYY format when calling functions.
-
+    11.Don't ask for details at once, ask for one detail at a time.
+    
     Current Conversation:
     {chat_history}
 
