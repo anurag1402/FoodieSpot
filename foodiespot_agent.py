@@ -1,14 +1,11 @@
 
-
 import google.generativeai as genai
 import json
 from foodiespot_db import recommend_restaurant, make_reservation, modify_reservation, cancel_reservation, get_reservation_details, get_connection, execute_sql_query
-import os
-from dotenv import load_dotenv
+import streamlit as st
 from datetime import date, timedelta
 
-load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash-8b')
 
@@ -210,7 +207,7 @@ def process_general_query(user_input):
                 The SQL query results are:
                 {result_str}
                 
-                Please format these results in a human-readable way, explaining what they represent.
+                Please format these results in a human-readable way,if you dont have answers, just say "I don't have an answer for that."
                 """
                 
                 interpretation = model.generate_content(interpretation_prompt)
@@ -251,7 +248,8 @@ def run_agent(user_input, chat_history):
     8. If the user specifically states that location or rating is not an issue, or similar phrases implying any value works, then fetch the top 3 restaurants.
     9. If the user asks a general question about the restaurants, generate a SQL query to answer it.
     10. For date formats, always use DD-MM-YYYY format when calling functions.
-
+    11.Don't ask for details at once, ask for one detail at a time.
+    
     Current Conversation:
     {chat_history}
 
