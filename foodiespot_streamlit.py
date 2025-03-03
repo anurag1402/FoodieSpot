@@ -135,7 +135,7 @@ elif page == "ℹ️ About":
     <div style="background-color: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
     <h3>Our Mission</h3>
     <p>FoodieSpot is dedicated to connecting food lovers with their perfect dining experiences. 
-        Our  platform makes restaurant discovery and reservations effortless.</p>
+        Making restaurant discovery and reservations effortless.</p>
         
     <h3>How It Works</h3>
     <p>Simply chat with our assistant to find restaurants, get recommendations, or make reservations.</p>
@@ -151,10 +151,16 @@ elif page == "ℹ️ About":
     """, unsafe_allow_html=True)
 
 # Callback for handling messages in chat page
+def animated_loading():
+    def animated_loading():
+        with st.spinner('Thinking...'):
+            time.sleep(1.5)
+
+# Use in the chat response section:
 if page == "💬 Chat with Assistant" and len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        message_placeholder.markdown("🤔 Thinking...")
+        animated_loading()  # Add visual feedback
         user_message = st.session_state.messages[-1]["content"]
         full_response = run_agent(user_message, st.session_state.chat_history)
 
