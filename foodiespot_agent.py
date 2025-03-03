@@ -10,7 +10,7 @@ GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash-8b')
 
-unction_descriptions = [
+function_descriptions = [
     {
         "name": "recommend_restaurant",
         "description": "Recommends a restaurant based on user preferences.",
