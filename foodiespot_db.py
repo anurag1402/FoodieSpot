@@ -17,7 +17,7 @@ def get_connection():
         print(f"Database connection error: {e}")
         return None
 
-ef recommend_restaurant(cuisine=None, party_size=None, rating=None, address=None):
+def recommend_restaurant(cuisine=None, party_size=None, rating=None, address=None):
     conn = get_connection()
     if conn is None:
         return "Database connection failed. Please check your credentials."
