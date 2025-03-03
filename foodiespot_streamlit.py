@@ -154,33 +154,37 @@ elif page == "ℹ️ About":
 # Callback for handling messages in chat page
 if page == "💬 Chat with Assistant" and len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     with st.chat_message("assistant"):
-        # Create a typing indicator
         message_placeholder = st.empty()
         message_placeholder.markdown("🤔 Thinking...")
-        
-        # Get user's last message
         user_message = st.session_state.messages[-1]["content"]
-        
-        # Process message with agent
         full_response = run_agent(user_message, st.session_state.chat_history)
-        
-        # Simulate typing
-        displayed_response = ""
-        for i in range(len(full_response)):
-            displayed_response += full_response[i]
-            message_placeholder.markdown(displayed_response + "▌" if i < len(full_response) - 1 else displayed_response)
-            time.sleep(0.005)  # Adjust typing speed
 
-        # Update chat history
+        if isinstance(full_response, str):  # Handle string responses
+            message_placeholder.markdown(full_response)
+        elif isinstance(full_response, dict):  # Handle dictionary responses
+            details = f"""
+            **Reservation Details:**
+            - Reservation ID: {full_response.get('reservation_id')}
+            - Restaurant: {full_response.get('restaurant_name')}
+            - Customer: {full_response.get('customer_name')}
+            - Date: {full_response.get('date')}
+            - Time: {full_response.get('time')}
+            - Party Size: {full_response.get('party_size')}
+            """
+            message_placeholder.markdown(details)
+        elif full_response is None: #Handle None response
+            message_placeholder.markdown("Reservation not found.")
+        else: #handle unexpected response.
+            message_placeholder.markdown("An unexpected error occurred.")
+
+
         st.session_state.chat_history += f"User: {user_message}\nAgent: {full_response}\n"
-        
-        # Add assistant message to session
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
+        st.session_state.messages.append({"role": "assistant", "content": message_placeholder.markdown(details) if isinstance(full_response, dict) else full_response})
 
 # Add footer
 st.markdown("""
 <footer>
-    <p>Designed with ❤️ by FoodieSpot Team</p>
-    <p>© 2025 FoodieSpot | Privacy Policy | Terms of Service</p>
+    <p>Anurag A</p>
+    
 </footer>
 """, unsafe_allow_html=True)
