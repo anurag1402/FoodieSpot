@@ -97,6 +97,7 @@ The prompt includes clear instructions, available tools, and examples to ensure 
 
 **Agent:** "Reservation modified successfully. Reservation ID: 123456."
 
+
 ### User Journey 3: Asking a General Question
 
 **User:** "How many Chinese restaurants are there?"
@@ -108,6 +109,10 @@ The prompt includes clear instructions, available tools, and examples to ensure 
 **User:** "Recommend a restaurant with a rating of 4 or higher."
 
 **Agent:** "Recommended Restaurants: \n - **[Restaurant Name]**: [Cuisine], Rating: [Rating], Address: [Address]"
+
+Examples:
+<img width="498" alt="Screenshot 2025-03-03 at 3 29 13 PM" src="https://github.com/user-attachments/assets/11efda72-2217-493e-b50d-7674013145ba" />
+<img width="540" alt="Screenshot 2025-03-03 at 3 27 46 PM" src="https://github.com/user-attachments/assets/0d964270-8541-4bf4-9d28-dbe7d8c3043c" />
 
 ## Business Strategy Summary
 
