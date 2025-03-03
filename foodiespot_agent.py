@@ -3,7 +3,7 @@ import google.generativeai as genai
 import json
 from foodiespot_db import recommend_restaurant, make_reservation, modify_reservation, cancel_reservation, get_reservation_details, get_connection, execute_sql_query
 import streamlit as st
-from datetime import date, timedelta
+from datetime import date, timedelta,datetime
 
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
