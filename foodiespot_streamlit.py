@@ -171,16 +171,19 @@ if page == "💬 Chat with Assistant" and len(st.session_state.messages) > 0 and
         if isinstance(full_response, str):  # Handle string responses
             message_placeholder.markdown(full_response)
         elif isinstance(full_response, dict):  # Handle dictionary responses
-            details = f"""
-            **Reservation Details:**
-            - Reservation ID: {full_response.get('reservation_id')}
-            - Restaurant: {full_response.get('restaurant_name')}
-            - Customer: {full_response.get('customer_name')}
-            - Date: {full_response.get('date')}
-            - Time: {full_response.get('time')}
-            - Party Size: {full_response.get('party_size')}
-            """
-            message_placeholder.markdown(details)
+            if 'error' in full_response:
+                message_placeholder.markdown(f"Error: {full_response['error']}")
+            else:
+                details = f"""
+                **Reservation Details:**
+                - Reservation ID: {full_response.get('reservation_id')}
+                - Restaurant: {full_response.get('restaurant_name')}
+                - Customer: {full_response.get('customer_name')}
+                - Date: {full_response.get('date')}
+                - Time: {full_response.get('time')}
+                - Party Size: {full_response.get('party_size')}
+                """
+                message_placeholder.markdown(details)
         elif full_response is None:  # Handle None response
             message_placeholder.markdown("Reservation not found.")
         else:  # handle unexpected response.
@@ -189,7 +192,7 @@ if page == "💬 Chat with Assistant" and len(st.session_state.messages) > 0 and
         st.session_state.chat_history += f"User: {user_message}\nAgent: {full_response}\n"
         st.session_state.messages.append(
             {"role": "assistant",
-             "content": message_placeholder.markdown(details) if isinstance(full_response, dict) else full_response})
+             "content": message_placeholder.markdown(details) if isinstance(full_response, dict) and 'error' not in full_response else full_response})
 
 # Add footer
 st.markdown("""
