@@ -67,20 +67,6 @@ FoodieSpot is an AI-powered restaurant reservation agent designed to streamline 
     -   Add your database and Google API credentials to Streamlit Secrets in the app settings.
 
 
-# FoodieSpot: Your AI Restaurant Assistant
-
-## Overview
-
-FoodieSpot is an AI-powered application designed to simplify restaurant discovery and reservation management.  It leverages a large language model (LLM) to understand user requests, extract relevant information, and interact with a database to provide personalized recommendations, make reservations, and manage existing bookings.
-
-## Features
-
-*   **AI-Powered Chat Assistant:**  Interact with an AI assistant to find restaurants, make reservations, and get answers to your dining-related questions.
-*   **Personalized Recommendations:**  Receive tailored restaurant recommendations based on your preferences (cuisine, rating, location).
-*   **Easy Reservation Management:**  Make, modify, and cancel reservations quickly and easily.
-*   **Comprehensive Restaurant Information:**  Access detailed restaurant information, including cuisine, rating, address, and seating capacity.
-*   **24/7 Availability:**  The AI assistant is available 24/7 to assist you.
-*   **Top-Rated Restaurant Listings:** Browse top-rated restaurants by cuisine.
 
 ## Architecture
 
