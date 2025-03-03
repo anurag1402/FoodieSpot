@@ -133,14 +133,15 @@ def generate_sql_query(user_question):
     """Generates a SQL query from a natural language question."""
     prompt = f"""
     You are an AI assistant that translates natural language questions into SQL queries.
-    The database has tables:
-    - restaurants (id, name, cuisine, rating, address, seating_capacity, current_booking)
-    - reservations (id, restaurant_id, customer_name, date, time, party_size)
-    
+    The database has the following tables:
+    - restaurants (restaurant_id INTEGER, name VARCHAR, cuisine VARCHAR, rating FLOAT, address TEXT, seating_capacity INTEGER, current_booking INTEGER)
+    - reservations (reservation_id INTEGER, restaurant_id INTEGER, customer_name VARCHAR, date DATE, time TIME, party_size INTEGER)
+
     The user asks: "{user_question}"
     
-    Generate a safe, well-formed SQL query to answer this question. Return ONLY the SQL query without any explanations.
+    Generate a safe, well-formed SQL query to answer this question about restaurants or reservations. Return ONLY the SQL query without any explanations.
     Make sure it is a SELECT query only, no modification queries allowed.
+
     """
     
     response = model.generate_content(prompt)
