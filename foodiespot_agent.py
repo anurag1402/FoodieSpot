@@ -4,6 +4,7 @@ import json
 from foodiespot_db import recommend_restaurant, make_reservation, modify_reservation, cancel_reservation, get_reservation_details, get_connection, execute_sql_query
 import streamlit as st
 from datetime import date, timedelta
+import re
 
 GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
@@ -219,18 +220,258 @@ def process_general_query(user_input):
             return None
     else:
         # Not a database query
-        return None
+        return 
+def create_conversation_context():
+    """Creates a new conversation context dictionary to track conversation state."""
+    return {
+        "current_restaurant": None,        # Remembers which restaurant the user is discussing
+        "current_cuisine": None,           # Tracks cuisine preference mentioned previously
+        "current_party_size": None,        # Stores party size once mentioned
+        "current_date": None,              # Keeps track of the reservation date
+        "current_time": None,              # Keeps track of the reservation time
+        "current_customer_name": None,     # Remembers customer name once provided
+        "current_reservation_id": None,    # Tracks reservation ID for modifications/cancellations
+        "last_intent": None,               # Remembers what the user was trying to do
+        "recommendations": [],             # Stores list of recent restaurant recommendations
+        "pending_info": []                 # Tracks what information we still need to collect
+    }
+
+def update_context_from_input(user_input, context):
+    """Extracts relevant information from user input and updates the conversation context."""
+    user_input_lower = user_input.lower()
+    
+    # Extract restaurant name - look for patterns like "at [restaurant name]" or "book [restaurant name]"
+    restaurant_patterns = [
+        r"(?:at|in|for|book|reserve|to|from)\s+([A-Z][A-Za-z\s']+)(?:\s+for|on|at|tomorrow|today|restaurant|\.|$)",
+        r"([A-Z][A-Za-z\s']+)(?:\s+restaurant)"
+    ]
+    
+    for pattern in restaurant_patterns:
+        match = re.search(pattern, user_input)
+        if match and len(match.group(1)) > 2:  # Ensure it's not just a short word
+            potential_restaurant = match.group(1).strip()
+            # Avoid setting common words like "today" or "tomorrow" as restaurant names
+            if potential_restaurant.lower() not in ["today", "tomorrow", "restaurant", "reservation", "dinner", "lunch"]:
+                context["current_restaurant"] = potential_restaurant
+                break
+    
+    # Extract cuisine preferences
+    cuisine_pattern = r"(?:like|prefer|want|looking for|find|suggest|recommend)\s+(?:some|a)?\s*([A-Za-z]+)(?:\s+food|cuisine)"
+    match = re.search(cuisine_pattern, user_input_lower)
+    if match:
+        context["current_cuisine"] = match.group(1).strip()
+    
+    # Extract party size - match numbers followed by "people" or "persons" or similar
+    party_size_pattern = r"(\d+)\s+(?:people|persons|guests|diners|party size|party of)"
+    match = re.search(party_size_pattern, user_input_lower)
+    if match:
+        context["current_party_size"] = int(match.group(1))
+    
+    # Extract date
+    date_patterns = [
+        r"(?:on|for)\s+(today|tomorrow)",
+        r"(?:on|for)\s+(?:the\s+)?(\d{1,2}(?:st|nd|rd|th)?(?:\s+of)?\s+(?:january|february|march|april|may|june|july|august|september|october|november|december))",
+        r"(?:on|for)\s+(?:the\s+)?(\d{1,2}-\d{1,2}-\d{4})"
+    ]
+    
+    for pattern in date_patterns:
+        match = re.search(pattern, user_input_lower)
+        if match:
+            date_str = match.group(1)
+            resolved_date = resolve_date(date_str)
+            if resolved_date:
+                context["current_date"] = resolved_date
+            break
+                
+    # Extract time
+    time_pattern = r"(?:at|for|by)\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight|\d{1,2}\s*o'clock)"
+    match = re.search(time_pattern, user_input_lower)
+    if match:
+        time_str = match.group(1)
+        # Convert to 24-hour format
+        if "am" in time_str.lower() or "pm" in time_str.lower():
+            try:
+                # Try to parse the time
+                time_obj = datetime.strptime(time_str.strip(), "%I:%M %p")
+                context["current_time"] = time_obj.strftime("%H:%M")
+            except ValueError:
+                try:
+                    # Try without minutes
+                    time_obj = datetime.strptime(time_str.strip(), "%I %p")
+                    context["current_time"] = time_obj.strftime("%H:%M")
+                except ValueError:
+                    pass
+        elif ":" in time_str:
+            # Assume 24-hour format
+            try:
+                time_obj = datetime.strptime(time_str.strip(), "%H:%M")
+                context["current_time"] = time_obj.strftime("%H:%M")
+            except ValueError:
+                pass
+    
+    # Extract customer name - this is trickier and might need multiple patterns
+    name_patterns = [
+        r"(?:name is|for)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)",
+        r"(?:reservation for|under|booking for)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)"
+    ]
+    
+    for pattern in name_patterns:
+        match = re.search(pattern, user_input)
+        if match:
+            context["current_customer_name"] = match.group(1).strip()
+            break
+    
+    # Extract reservation ID
+    id_pattern = r"(?:reservation|booking|confirmation)\s+(?:id|number|#)\s*(?:is|:)?\s*(\d{4,6})"
+    match = re.search(id_pattern, user_input_lower)
+    if match:
+        context["current_reservation_id"] = int(match.group(1))
+    
+    # Just digits pattern - might be a reservation ID
+    if context["last_intent"] in ["modify_reservation", "cancel_reservation", "get_reservation_details"]:
+        digits_pattern = r"^(\d{4,6})$"
+        match = re.search(digits_pattern, user_input.strip())
+        if match:
+            context["current_reservation_id"] = int(match.group(1))
+    
+    return context
+
+def get_next_required_info(context, intent):
+    """Determines what information is still needed based on intent and context."""
+    # Reset pending info list
+    context["pending_info"] = []
+    
+    if intent == "make_reservation":
+        required_fields = {
+            "current_restaurant": "Which restaurant would you like to book?",
+            "current_date": "For what date would you like to make the reservation?",
+            "current_time": "At what time would you like to reserve?",
+            "current_party_size": "How many people will be in your party?",
+            "current_customer_name": "What name should I put the reservation under?"
+        }
+        
+        for field, question in required_fields.items():
+            if context[field] is None:
+                context["pending_info"].append((field, question))
+    
+    elif intent == "modify_reservation":
+        if context["current_reservation_id"] is None:
+            context["pending_info"].append(("current_reservation_id", "What is your reservation ID number?"))
+        else:
+            # Only ask for fields the user wants to modify
+            possible_fields = {
+                "current_date": "What date would you like to change the reservation to?",
+                "current_time": "What time would you like to change the reservation to?",
+                "current_party_size": "How many people will be in your party now?"
+            }
+            
+            # We need at least one field to modify
+            if all(context[field] is None for field in ["current_date", "current_time", "current_party_size"]):
+                context["pending_info"].append(("modification_field", "What would you like to change about your reservation? The date, time, or party size?"))
+    
+    elif intent == "cancel_reservation" or intent == "get_reservation_details":
+        if context["current_reservation_id"] is None:
+            context["pending_info"].append(("current_reservation_id", "What is your reservation ID number?"))
+    
+    elif intent == "recommend_restaurant":
+        # For recommendations, we'll be more flexible - no required fields but we'll use what we have
+        pass
+    
+    return context["pending_info"]
+
 
 def run_agent(user_input, chat_history):
-    # First, check if it's a general query that needs SQL generation
-    intent = determine_intent(user_input)
+    # Initialize or retrieve conversation context
+    if "conversation_context" not in globals():
+        globals()["conversation_context"] = create_conversation_context()
     
+    context = globals()["conversation_context"]
+    
+    # First, update context with any information from the user's input
+    context = update_context_from_input(user_input, context)
+    
+    # Determine intent
+    intent = determine_intent(user_input)
+    context["last_intent"] = intent
+    
+    # Get next required information based on intent and current context
+    pending_info = get_next_required_info(context, intent)
+    
+    # Check if we're waiting for specific information
+    if pending_info:
+        # Ask for the next piece of information in the sequence
+        field, question = pending_info[0]
+        return question
+    
+    # If we have all required information, proceed with the appropriate function call
+    if intent == "make_reservation" and all(context[field] is not None for field in ["current_restaurant", "current_date", "current_time", "current_party_size", "current_customer_name"]):
+        # We have all required info, make the reservation
+        result = make_reservation(
+            restaurant_name=context["current_restaurant"],
+            date=context["current_date"],
+            time=context["current_time"],
+            party_size=context["current_party_size"],
+            customer_name=context["current_customer_name"]
+        )
+        
+        # Reset context for the next conversation
+        globals()["conversation_context"] = create_conversation_context()
+        return result
+    
+    elif intent == "modify_reservation" and context["current_reservation_id"] is not None:
+        # Create arguments dictionary with only the fields that are provided
+        mod_args = {"reservation_id": context["current_reservation_id"]}
+        
+        if context["current_date"] is not None:
+            mod_args["new_date"] = context["current_date"]
+        if context["current_time"] is not None:
+            mod_args["new_time"] = context["current_time"]
+        if context["current_party_size"] is not None:
+            mod_args["new_party_size"] = context["current_party_size"]
+            
+        # Only proceed if at least one modification field is provided
+        if len(mod_args) > 1:  # more than just the reservation_id
+            result = modify_reservation(**mod_args)
+            globals()["conversation_context"] = create_conversation_context()
+            return result
+        else:
+            return "What would you like to change about your reservation? The date, time, or party size?"
+    
+    elif intent == "cancel_reservation" and context["current_reservation_id"] is not None:
+        result = cancel_reservation(reservation_id=context["current_reservation_id"])
+        globals()["conversation_context"] = create_conversation_context()
+        return result
+    
+    elif intent == "get_reservation_details" and context["current_reservation_id"] is not None:
+        result = get_reservation_details(reservation_id=context["current_reservation_id"])
+        return result
+    
+    elif intent == "recommend_restaurant":
+        # Build arguments with whatever information we have
+        rec_args = {}
+        if context["current_cuisine"] is not None:
+            rec_args["cuisine"] = context["current_cuisine"]
+        if context["current_party_size"] is not None:
+            rec_args["party_size"] = context["current_party_size"]
+            
+        # Store the recommendations in the context
+        result = recommend_restaurant(**rec_args)
+        
+        # If it's a successful recommendation (not an error message)
+        if "Recommended Restaurants:" in result:
+            # Don't reset context so we can use it for a subsequent reservation
+            return result
+        else:
+            return result
+    
+    # If we reach here, we need to use the regular function calling mechanism
+    # First, check if it's a general query that needs SQL generation
     if intent == "general_query":
         response = process_general_query(user_input)
         if response:
             return response
     
-    # If not handled as a general query or SQL failed, proceed with regular function calls
+    # If not handled by context or as a general query, proceed with the existing LLM-based approach
     prompt = f"""
     You are a restaurant reservation agent for FoodieSpot. Your goal is to help users make, modify, or cancel reservations, and provide restaurant recommendations.
 
@@ -248,7 +489,7 @@ def run_agent(user_input, chat_history):
     8. If the user specifically states that location or rating is not an issue, or similar phrases implying any value works, then fetch the top 3 restaurants.
     9. If the user asks a general question about the restaurants, generate a SQL query to answer it.
     10. For date formats, always use DD-MM-YYYY format when calling functions.
-    11.Don't ask for details at once, ask for one detail at a time.
+    11. Don't ask for details all at once, ask for one detail at a time.
     
     Current Conversation:
     {chat_history}
@@ -271,6 +512,7 @@ def run_agent(user_input, chat_history):
             arguments = json.loads(arguments_json)
 
             try:
+                # Execute the appropriate function based on the function call
                 if function_name == "recommend_restaurant":
                     result = recommend_restaurant(**arguments)
                 elif function_name == "make_reservation":
