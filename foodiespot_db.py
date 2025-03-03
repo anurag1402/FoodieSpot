@@ -77,9 +77,17 @@ def make_reservation(restaurant_name, date, time, party_size, customer_name):
         # Generate a random 5-digit reservation ID
         reservation_id = random.randint(10000, 99999)
 
+        # Convert date and time strings to date and time objects
+        try:
+            date_obj = datetime.strptime(date, "%d-%m-%Y").date()
+            time_obj = datetime.strptime(time, "%H:%M").time()
+        except ValueError as e:
+            conn.close()
+            return f"Invalid date or time format: {e}"
+
         cursor.execute(
             "INSERT INTO reservations (reservation_id, restaurant_id, customer_name, date, time, party_size) VALUES (%s, %s, %s, %s, %s, %s)",
-            (reservation_id, restaurant_id, customer_name, date, time, party_size),
+            (reservation_id, restaurant_id, customer_name, date_obj, time_obj, party_size),
         )
 
         print(f"Reservation ID: {reservation_id}")
@@ -89,7 +97,14 @@ def make_reservation(restaurant_name, date, time, party_size, customer_name):
         conn.commit()
         conn.close()
 
-        return f"Reservation confirmed for {customer_name} at {restaurant_name} on {date} at {time} for {party_size} people. Your reservation ID is: {reservation_id}"
+        return {
+            "reservation_id": reservation_id,
+            "restaurant_name": restaurant_name,
+            "date": date,
+            "time": time,
+            "party_size": party_size,
+            "customer_name": customer_name
+        }
     except psycopg2.Error as e:
         conn.rollback()
         conn.close()
