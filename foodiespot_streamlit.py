@@ -135,11 +135,9 @@ elif page == "ℹ️ About":
     <div style="background-color: #fff; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
     <h3>Our Mission</h3>
     <p>FoodieSpot is dedicated to connecting food lovers with their perfect dining experiences. 
-        Our AI-powered platform makes restaurant discovery and reservations effortless.</p>
+        AI-powered platform makes restaurant discovery and reservations effortless.</p>
         
-    <h3>How It Works</h3>
-    <p>Simply chat with our assistant to find restaurants, get recommendations, or make reservations.
-    Our system uses advanced AI to understand your preferences and provide personalized suggestions.</p>
+    
         
     <h3>Features</h3>
     <ul>
